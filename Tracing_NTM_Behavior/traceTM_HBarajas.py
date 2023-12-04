@@ -34,17 +34,17 @@ class NTM:
                 self.transitions[key].append(value)
 
     def simulate(self, input_string):
-        initial_config = {'state': self.start_state, 'tape': list(input_string) + ['_'], 'head': 0, 'steps': 0, 'parent': None}
-        configs = deque([initial_config])
+        initial = {'state': self.start_state, 'tape': list(input_string) + ['_'], 'head': 0, 'steps': 0, 'parent': None}
+        NTM_setup = deque([initial])
         max_depth = 0
 
-        while configs:
-            config = configs.popleft()
-            state, tape, head, steps = config['state'], config['tape'], config['head'], config['steps']
-            max_depth = max(max_depth, config['steps'])
+        while NTM_setup:
+            SetUp = NTM_setup.popleft()
+            state, tape, head, steps = SetUp['state'], SetUp['tape'], SetUp['head'], SetUp['steps']
+            max_depth = max(max_depth, SetUp['steps'])
 
             if state == self.accept_state:
-                return f"String accepted in {steps} transitions", config['steps'], self.get_configuration_path(config)
+                return f"String accepted in {steps} transitions", SetUp['steps'], self.get_setup_path(SetUp)
             if state == self.reject_state:
                 continue
 
@@ -54,23 +54,23 @@ class NTM:
                 new_tape = tape.copy()
                 new_tape[head] = new_symbol
                 new_head = head + (1 if direction == 'R' else -1)
-                new_config = {'state': new_state, 'tape': new_tape, 'head': new_head, 'steps': steps + 1, 'parent': config}
-                configs.append(new_config)
+                new_SetUp = {'state': new_state, 'tape': new_tape, 'head': new_head, 'steps': steps + 1, 'parent': SetUp}
+                NTM_setup.append(new_SetUp)
 
-        return f"String rejected in {max_depth} transitions",None, self.get_configuration_path(config)
+        return f"String rejected in {max_depth} transitions",None, self.get_setup_path(SetUp)
 
-    def get_configuration_path(self, config):
+    def get_setup_path(self, SetUp):
         path = []
-        while config:
-            path.append(self.format_configuration(config))
-            config = config['parent']
+        while SetUp:
+            path.append(self.format_setup(SetUp))
+            SetUp = SetUp['parent']
         return path[::-1]
 
-    def format_configuration(self, config):
-        left_of_head = ''.join(config['tape'][:config['head']])
-        right_of_head = ''.join(config['tape'][config['head']+1:])
-        head_char = config['tape'][config['head']] if config['head'] < len(config['tape']) else '_'
-        return f"{left_of_head}({config['state']},{head_char}){right_of_head}"
+    def format_setup(self, SetUp):
+        left_of_head = ''.join(SetUp['tape'][:SetUp['head']])
+        right_of_head = ''.join(SetUp['tape'][SetUp['head']+1:])
+        head_char = SetUp['tape'][SetUp['head']] if SetUp['head'] < len(SetUp['tape']) else '_'
+        return f"{left_of_head}({SetUp['state']},{head_char}){right_of_head}"
 
 def main():
     choice = 'Y'
