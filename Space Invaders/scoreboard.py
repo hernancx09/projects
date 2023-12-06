@@ -79,10 +79,10 @@ class Scoreboard(pygame.sprite.Sprite):
         self.score += alien.points
         self.update_score()
 
-    def decrease(self):
+    def decrease(self, amount = 5):
         """Decrease self.score."""
-        if self.score >= 5:
-            self.score -= 5
+        if self.score >= amount:
+            self.score -= amount
         else:
             self.score = 0
         self.update_score()
@@ -92,3 +92,9 @@ class Scoreboard(pygame.sprite.Sprite):
         if self.lives > 0:
             self.lives -= 1
             self.update_score()
+            
+    def reset(self):
+        """Resets the score and lives to their initial states."""
+        self.score = 0
+        self.lives = LIVES
+        self.update_score()

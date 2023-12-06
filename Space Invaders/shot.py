@@ -1,5 +1,6 @@
 import pygame
 from constants import *
+from scoreboard import *
 
 
 class Shot(pygame.sprite.Sprite):

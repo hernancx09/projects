@@ -190,6 +190,23 @@ def write_game_over(end_iter, game_over, last_char_time, screen):
         # update to show the rendered text
         pygame.display.update()
 
+def draw_button(screen, text, position, font, button_action=None):
+    """Draws a button and checks for click events."""
+    mouse = pygame.mouse.get_pos()
+    click = pygame.mouse.get_pressed()
+    button = pygame.Rect(position, (200, 50))  # You can adjust the size
+
+    # Change color if mouse hovers over button
+    if button.collidepoint(mouse):
+        pygame.draw.rect(screen, (170, 170, 170), button)
+        if click[0] == 1 and button_action is not None:
+            button_action()  # Perform the action linked to the button
+    else:
+        pygame.draw.rect(screen, (100, 100, 100), button)
+
+    text_surface = font.render(text, True, (255, 255, 255))
+    text_rect = text_surface.get_rect(center=button.center)
+    screen.blit(text_surface, text_rect)
 
 def create_hiscore_text():
     """

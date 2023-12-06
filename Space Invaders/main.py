@@ -1,13 +1,14 @@
 import pygame
 from constants import *
-from spaceship import SpaceShip
-from shot import Shot
-from alien_shot import AlienShot
-from scoreboard import Scoreboard
-from boss import Boss
+from spaceship import *
+from shot import *
+from alien_shot import *
+from scoreboard import *
+from boss import *
 from helper_functions import *
 import time
 from random import choice
+
 
 
 
@@ -29,49 +30,47 @@ def draw_button(screen, text, position, font, button_action=None):
     text_rect = text_surface.get_rect(center=button.center)
     screen.blit(text_surface, text_rect)
 
+
 def main_menu():
     """Displays the main menu and handles navigation."""
+    background_image = pygame.image.load('static\img\MainMenu.jpg')
+
     clock = pygame.time.Clock()
-    running = True
-    while running:
-        ship = pygame.image.load("static/img/MainMenu.jpg")
-        ship_top = screen.get_height() - ship.get_height()
-        ship_left = screen.get_width()/2 - ship.get_width()/2
-        screen.blit(ship, (ship_left,ship_top))
-
-        # Draw buttons
-        draw_button(screen, "Play", (150, 100), font, start_game)
-        draw_button(screen, "Level 1", (150, 200), font, lambda: select_level(1))
-        draw_button(screen, "Level 2", (150, 300), font, lambda: select_level(2))
-        # ... [add more levels as needed]
-
+    while True:
+        screen.blit(background_image, (0, 0))
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                game_on = False  # Exit the function to quit the game
+                pygame.mixer.quit()
+                pygame.quit()
+
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     game_on = False
-                    running = False
+                    pygame.mixer.quit()
+                    pygame.quit()
 
 
-        pygame.display.update()
-        if not running:
-            pygame.quit()
-        clock.tick(60)
+
+        draw_button(screen, "Play", (SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2), font, start_game)
+
+        pygame.display.update()  # Update the display
+        clock.tick(60)  # Control the frame rate
+
+    pygame.quit()
+
+
 
 
 def start_game():
     """Starts the game."""
     global game_on, scoreboard, alien_count
     game_on = True
+    build_wall(wall_group_list)
     scoreboard.reset()  # Reset the scoreboard
     alien_count = 0
     PlayGame()
 
-def select_level(level):
-    """Sets the selected level."""
-    global current_level
-    current_level = level
 # Initialize pygame
 pygame.init()
 
@@ -81,7 +80,7 @@ pygame.init()
 screen = pygame.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT])
 pygame.display.set_caption("Space Invaders")
 # Set background colour
-screen.fill(WHITE)
+screen.fill(BLACK)
 
 # Scoreboard
 scoreboard = Scoreboard()
@@ -105,11 +104,6 @@ alien_move_sounds = (pygame.mixer.Sound(ALIEN_MOVEMENT_SOUND_1), pygame.mixer.So
 game_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 game_surface.fill(DARK_GREY)
 
-# Signature
-signature = pygame.image.load("static/img/signature.png").convert_alpha()
-signature.set_colorkey(BLACK, pygame.RLEACCEL)
-signature_corner = signature.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 200))
-
 # Game over text
 game_over = create_game_over_text()
 
@@ -127,9 +121,10 @@ build_wall(wall_group_list)
 
 # ======================================================================================================================
 def PlayGame():
-    global game_on, scoreboard
+    global game_on, scoreboard, SHOT_DELAY, MOVEMENT_DELAY, text_hiscore, ability_activated, Easter
+
     # Create spaceship
-    spaceship = SpaceShip(SPACESHIP_PATH)
+    spaceship = SpaceShip(SPACESHIP_PATH, shot_delay=SHOT_DELAY)
 
     # Create shot group
     shots = pygame.sprite.Group()
@@ -176,6 +171,10 @@ def PlayGame():
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     game_on = False
+                elif event.key == pygame.K_p:
+                    Easter = not Easter
+                elif event.key == pygame.K_l:
+                    scoreboard.lives = 99
 
         # Player Shot collision detection and spaceship movement ===========================================================
 
@@ -339,7 +338,7 @@ def PlayGame():
                     if alien is not None:
                         alien.alien_movement = int(1.5 * ALIEN_MOVEMENT)
             elif COLUMNS - missing_columns <= 1:
-                print(COLUMNS - missing_columns)
+                #print(COLUMNS - missing_columns)
                 for alien in fleet_group:
                     if alien is not None:
                         alien.alien_movement = 2 * ALIEN_MOVEMENT
@@ -371,6 +370,7 @@ def PlayGame():
             # random_num = random.randint(0, 1)
             # if random_num == 0:
             #     boss = Boss()
+            global ability_activated
         for boss in boss_group:
             if boss is not None:
                 if boss.destruct_start_time is None:
@@ -378,14 +378,12 @@ def PlayGame():
                     boss.out_of_screen()
                 else:
                     boss.update_destroyed()
+                    ability_activated = True
 
         # Rendering ========================================================================================================
 
         # Place the gaming area on the screen
         screen.blit(game_surface, (0, 0))
-
-        # Place signature on the screen
-        screen.blit(signature, signature_corner)
 
         # Render all aliens in the fleet
         for alien in fleet_group:
@@ -430,6 +428,31 @@ def PlayGame():
         for j in range(1, scoreboard.lives + 1):
             life_corner = life_icon.get_rect(center=(150 + j * 60, SCREEN_HEIGHT - 35))
             screen.blit(life_icon, life_corner)
+        
+        global SpeedShotConst, ability_start_time, last_ability_activation_score
+
+            # Track if the special ability should be activated
+        if ability_activated and boss.destruct_start_time is not None:
+            ability_start_time = time.time()
+            last_ability_activation_score = scoreboard.score 
+
+        #Easter egg LASERBEAM:
+        if Easter:
+            SHOT_DELAY = 0.01
+            spaceship.shot_delay = SHOT_DELAY
+        else:
+            SHOT_DELAY = 1
+            spaceship.shot_delay = SHOT_DELAY
+
+        # Special ability active
+        if ability_activated:
+            if time.time() - ability_start_time < ability_duration:
+                SHOT_DELAY = 0.3
+                spaceship.shot_delay = SHOT_DELAY  # Update the spaceship's shot_delay
+            else:
+                ability_activated = False
+                SHOT_DELAY = 1
+                spaceship.shot_delay = SHOT_DELAY
 
         # Render end screen text -------------------------------------------------------------------------------------------
         # Check whether player has any lives left
@@ -465,8 +488,8 @@ def PlayGame():
         # Set refresh rate to 60 times per second (60Hz/FPS)
         clock.tick(60)
 
-
-while True:
+running = True
+while running:
     main_menu()  # Show the main menu
     scoreboard.lives = LIVES
     if game_on:

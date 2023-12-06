@@ -4,7 +4,7 @@ import time
 
 
 class SpaceShip(pygame.sprite.Sprite):
-    def __init__(self, spaceship_path, spaceship_width=44, spaceship_height=32, spaceship_color=WHITE):
+    def __init__(self, spaceship_path, spaceship_width=44, spaceship_height=32, spaceship_color=WHITE, shot_delay = SHOT_DELAY):
         """
         :param spaceship_path: str
         :param spaceship_width: int
@@ -35,6 +35,8 @@ class SpaceShip(pygame.sprite.Sprite):
         self.explosion = 1
         # last explosion sprite change time
         self.explosion_time = None
+        # bullet delay
+        self.shot_delay = shot_delay
 
     def control(self, pressed_keys):
         """
@@ -51,8 +53,9 @@ class SpaceShip(pygame.sprite.Sprite):
             self.corner.move_ip(self.speed, 0)
             self.direction = 1
         # Shoot
+        global SHOT_DELAY
         if pressed_keys[pygame.K_SPACE] or pressed_keys[pygame.K_UP]:
-            if time.time() - self.last_shot > SHOT_DELAY:
+            if time.time() - self.last_shot > self.shot_delay:
                 self.last_shot = time.time()
                 # Create a shot object
                 shoot = True
@@ -111,3 +114,4 @@ class SpaceShip(pygame.sprite.Sprite):
         """Calls self.init_destruction() method and removes one life from self.lives."""
         self.init_destruction()
         self.lives -= 1
+        

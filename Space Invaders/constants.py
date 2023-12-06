@@ -5,12 +5,15 @@ GREEN = (0, 255, 0)
 RED = (180, 0, 0)
 WHITE = (230, 230, 230)
 
+# Settings and menu
+in_settings_menu = False
+
 # High score file path
 HI_SCORE_PATH = "high_score.json"
 
 # Screen
 SCREEN_WIDTH = 920
-SCREEN_HEIGHT = 1010
+SCREEN_HEIGHT = 820
 
 # game window icon
 WINDOW_ICON = "static/img/icon.png"
@@ -93,7 +96,7 @@ ALIEN_BOSS_EXPLOSIONS = ("static/img/alien_boss_explosion_1.png", "static/img/al
 ALIEN_SHOT_EXPLOSION = "static/img/alien_shot_explosion.png"
 ALIEN_SHOT_EXPLOSION_GREEN = "static/img/alien_shot_explosion_green.png"
 ALIEN_SHOT_EXPLOSION_HEIGHT = 32
-MOVEMENT_DELAY = 0.20
+MOVEMENT_DELAY = 0.2
 ALIEN_MOVEMENT = 10
 BOSS_MOVEMENT = 2
 BOSS_APPEARANCE_DELAY = 25
@@ -138,3 +141,12 @@ PLAYER_EXPLOSION_SOUND = "static/sound/player_explosion.wav"
 
 # end screen time
 END_SCREEN_TIME = 5000
+
+# Speed shot ability
+ability_activated = False
+ability_start_time = 0
+ability_duration = 5  # 5 seconds
+last_ability_activation_score = 0 
+SpeedShotConst = 150
+
+Easter = False
