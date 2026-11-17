@@ -1,0 +1,175 @@
+# =============================================================================
+# docker-compose.yml: the whole virtual distributed system in one file.
+#
+# Every "service" below becomes one container: an isolated Linux process
+# with its own network stack and IP address. Docker gives each container a
+# DNS name equal to its service name, so `engine_xau` is reachable at host
+# "engine_xau" from any container on the same network.
+#
+# All services use ONE image (see Dockerfile). Each runs a different binary
+# from /app/bin via `command:`.
+#
+#   docker compose up --build              # build the image + start everything
+#   docker compose up --build engine_xau   # start just one service
+#   docker compose ps                      # what's running / exited
+#   docker compose logs -f gateway1        # follow one service's logs
+#   docker compose exec gateway1 bash      # shell INSIDE a container
+#   docker compose down                    # stop + remove containers & networks
+# =============================================================================
+
+# YAML anchors (&name) define shared settings once. `<<: *name` reuses them.
+# Docker ignores top-level keys that start with "x-".
+x-service: &service
+  build: .
+  image: metals-market-sim:dev
+  # NET_ADMIN lets tools/netem.sh inject latency/loss with `tc`. NET_RAW lets tcpdump capture.
+  cap_add: [NET_ADMIN, NET_RAW]
+  environment: &common-env
+    LOG_LEVEL: INFO        # DEBUG for much more detail
+  # TODO(STRETCH): `restart: on-failure`, then kill a gateway (docker compose kill gateway2)
+  #   and watch: the LB marks it down, it restarts, the LB marks it up again.
+
+x-gateway: &gateway
+  <<: *service
+  command: ["/app/bin/gateway"]
+  networks: [core_net]     # NOT on trading_net: clients can't bypass the LB
+  depends_on: [engine_xau, engine_xag]
+  # depends_on only waits for the container to START, not for the engine's port
+  # to be listening. So the gateway must retry connecting (tcp_connect_retry).
+  # TODO(P2): add a `healthcheck:` to the engines and use
+  #   depends_on: {engine_xau: {condition: service_healthy}}
+
+services:
+
+  # ---------------------------------------------------------------- engines
+  # One matching engine per symbol. Each one OWNS its book completely (single
+  # writer = no consistency problems). That's sharding by symbol.
+  engine_xau:
+    <<: *service
+    command: ["/app/bin/engine"]
+    environment:
+      <<: *common-env
+      SYMBOL: XAU
+      ORDER_PORT: "9200"   # TCP from gateways
+      MD_PORT: "9300"      # UDP market data out
+      ADMIN_PORT: "9500"   # TCP text stats (leaderboard)
+    # BOTH networks: core_net for orders from gateways; trading_net so clients
+    # can subscribe to its UDP market data directly (bypassing the LB, like real exchanges).
+    networks: [core_net, trading_net]
+
+  engine_xag:
+    <<: *service
+    command: ["/app/bin/engine"]
+    environment:
+      <<: *common-env
+      SYMBOL: XAG
+      ORDER_PORT: "9200"
+      MD_PORT: "9300"
+      ADMIN_PORT: "9500"
+    networks: [core_net, trading_net]
+
+  # --------------------------------------------------------------- gateways
+  # Three identical, stateless replicas. Written out by hand (instead of
+  # deploy.replicas) so each has its own DNS name and can be stopped on purpose:
+  #   docker compose stop gateway2
+  gateway1:
+    <<: *gateway
+    environment: &gateway-env
+      <<: *common-env
+      GATEWAY_ID: gw1
+      LISTEN_PORT: "9100"
+      ENGINES: "XAU=engine_xau:9200,XAG=engine_xag:9200"   # the shard map: symbol -> engine
+      RATE_LIMIT_PER_SEC: "50"
+
+  gateway2:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      GATEWAY_ID: gw2
+
+  gateway3:
+    <<: *gateway
+    environment:
+      <<: *gateway-env
+      GATEWAY_ID: gw3
+
+  # ---------------------------------------------------------- load balancer
+  load_balancer:
+    <<: *service
+    command: ["/app/bin/load_balancer"]
+    environment:
+      <<: *common-env
+      LISTEN_PORT: "9000"
+      BACKENDS: "gateway1:9100,gateway2:9100,gateway3:9100"
+      STRATEGY: round_robin              # round_robin | least_connections | ip_hash
+      HEALTH_CHECK_INTERVAL_MS: "2000"
+      STATS_PORT: "9001"
+    networks: [trading_net, core_net]    # the ONLY bridge between the two networks
+    ports:
+      - "9000:9000"   # host:container, so programs on your PC can connect to localhost:9000
+    depends_on: [gateway1, gateway2, gateway3]
+
+  # ----------------------------------------------------------- fundamentals
+  fundamentals:
+    <<: *service
+    command: ["/app/bin/fundamentals"]
+    environment:
+      <<: *common-env
+      PORT: "9400"
+      XAU_START: "2400.00"
+      XAG_START: "30.00"
+      XAU_VOL: "0.15"        # annualized volatility
+      XAG_VOL: "0.25"        # silver is historically more volatile than gold
+      CORRELATION: "0.8"
+      TICK_MS: "250"
+      SIM_SPEED: "500"       # 1 real second = 500 simulated seconds (so prices visibly move)
+      SEED: "42"             # same seed = same price path = fair strategy comparisons
+    networks: [trading_net]
+
+  # ------------------------------------------------------------------- bots
+  bots:
+    <<: *service
+    command: ["/app/bin/bots"]
+    environment:
+      <<: *common-env
+      LB_ADDR: "load_balancer:9000"
+      MD_ADDRS: "XAU=engine_xau:9300,XAG=engine_xag:9300"
+      FUNDAMENTALS_ADDR: "fundamentals:9400"
+      # "type:count". Start with ONLY market makers + noise traders.
+      BOTS: "market_maker:2,noise_trader:5,momentum:2,informed_trader:1"
+      SEED: "7"
+    networks: [trading_net]
+    depends_on: [load_balancer, fundamentals]
+
+  # ------------------------------------------------------------------- YOU
+  my_trader:
+    <<: *service
+    command: ["/app/bin/my_trader"]
+    environment:
+      <<: *common-env
+      ACCOUNT: "me"
+      LB_ADDR: "load_balancer:9000"
+      MD_ADDRS: "XAU=engine_xau:9300,XAG=engine_xag:9300"
+      SEED: "1"
+      # TODO(P6): should YOU get the fundamentals feed? The informed bot has
+      #   it. Is it fair? Try both, and compare.
+      # FUNDAMENTALS_ADDR: "fundamentals:9400"
+    networks: [trading_net]
+    depends_on: [load_balancer]
+    # Only starts when asked:  docker compose --profile compete up --build
+    profiles: ["compete"]
+
+# ------------------------------------------------------------------ networks
+# Two virtual networks = two separate virtual switches. A container gets one
+# network interface (and IP) per network it joins. Check with:
+#   docker compose exec load_balancer ip addr
+networks:
+  trading_net:
+    driver: bridge
+  core_net:
+    driver: bridge
+    internal: true   # no route to the internet: a locked-down backend tier
+    # TODO(STRETCH): pin subnets so IPs are predictable in Wireshark:
+    # ipam:
+    #   config:
+    #     - subnet: 172.30.0.0/24
